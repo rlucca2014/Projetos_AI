@@ -1,0 +1,3 @@
+backend/hotel.db
+__pycache__/
+*.pyc
