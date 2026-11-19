@@ -1,19 +1,12 @@
-# Publicar para teste no celular
+# Publicação com PostgreSQL persistente
 
-1. Entre em https://dashboard.render.com e conecte sua conta GitHub.
-2. Selecione New > Web Service e o repositório rlucca2014/Projetos_AI.
-3. Use Branch: main e Root Directory: hotel-canino.
-4. Runtime: Python 3. Build Command: python --version. Start Command: python backend/server.py.
-5. Variável de ambiente HOST = 0.0.0.0. A variável PORT é fornecida pelo Render.
-6. Selecione Free para um teste descartável e crie o serviço.
-7. Espere o estado Live. Use a URL HTTPS exibida pelo Render no celular ou envie para o testador. O computador local pode ficar desligado.
+A versão atual está em https://titio-cachorrao.onrender.com/ e usa Neon PostgreSQL.
 
-Não é GitHub Pages: este aplicativo precisa executar Python, além de servir o React.
+No Render: Root Directory hotel-canino; Build Command pip install -r requirements.txt; Start Command python backend/server.py; HOST=0.0.0.0. PORT é definida pelo Render.
 
-## Dados de teste
+Configure DATABASE_URL como variável secreta em Environment, usando a conexão obtida em Neon > projeto titio-cachorrao > Postgres > Connect. Não copie a conexão para arquivos versionados. A aplicação cria suas tabelas automaticamente sem apagar dados existentes.
 
-O código publicado não inclui o banco local nem os cadastros existentes. A demonstração começa vazia. Ainda não existe login: qualquer pessoa com o endereço pode consultar e alterar os cadastros. Use somente dados fictícios no teste público.
+O plano Free do Render tem disco temporário. Por isso a versão pública usa o banco externo da Neon. Sem DATABASE_URL, o sistema usa SQLite, adequado para execução local, mas que não deve ser usado para persistência no Render Free.
 
-No plano Free, o SQLite fica em armazenamento temporário e pode ser perdido em reinícios ou publicações. Para preservar os dados, use um serviço pago com disco persistente, monte-o em /var/data e configure HOTEL_DB_PATH=/var/data/hotel.db. Confira os custos no provedor antes de contratar. Outra etapa possível é migrar o banco para PostgreSQL e implementar login antes do uso real.
+O site ainda não possui login: use apenas dados fictícios no teste público. Configure autenticação e backups antes de uso real. Os limites dos planos gratuitos continuam sujeitos aos provedores.
 
-Fontes: https://render.com/docs/web-services e https://render.com/docs/free e https://render.com/docs/disks.
