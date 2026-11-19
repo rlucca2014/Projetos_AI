@@ -1,6 +1,6 @@
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
-import sqlite3, json, datetime, os
+import sqlite3, json, datetime, os, re
 from decimal import Decimal, InvalidOperation
 from contextlib import contextmanager
 ROOT=Path(__file__).resolve().parent.parent
@@ -14,6 +14,7 @@ else: INTEGRITY_ERRORS=(sqlite3.IntegrityError,)
 class PostgresAdapter:
  def __init__(self,connection): self.connection=connection
  def execute(self,sql,params=()):
+  sql=re.sub(r'\b(end|start)\b',lambda m: chr(34)+m.group(0)+chr(34),sql)
   sql=sql.replace('?', '%s').replace('status!="departed"', "status!='departed'").replace('status="present"', "status='present'").replace('status="reserved"', "status='reserved'").replace('status="departed"', "status='departed'")
   return self.connection.execute(sql,params)
 @contextmanager
@@ -93,5 +94,7 @@ class Handler(SimpleHTTPRequestHandler):
   except (ValueError,KeyError,TypeError) as e: self.send_json({'error':str(e)},400)
 if __name__=='__main__':
  init();print('Hotel canino: http://localhost:4180',flush=True);ThreadingHTTPServer((os.environ.get('HOST','127.0.0.1'),int(os.environ.get('PORT','4180'))),Handler).serve_forever()
+
+
 
 
