@@ -1,47 +1,45 @@
 # Titio Cachorrão — Hotel canino
 
-Protótipo local em React + Python, com SQLite. Cadastro de cães e tutores; reserva de estadias; check-in e check-out com registro de hora; painel operacional; código único de coleira; simulação de leitura. Não há hardware conectado.
+Aplicação React + Python. Cadastro de cães e tutores, reservas, check-in/check-out, diária configurável (inicialmente R$ 110/noite), relatórios e identificação simulada por coleira.
 
-## Executar
+Site: https://titio-cachorrao.onrender.com/
 
-Requer Python 3.10 ou superior. Não requer pip.
+## Executar localmente
+
+Requer Python 3.10 ou superior.
 
 ```powershell
+python -m pip install -r requirements.txt
 python backend/server.py
 ```
 
-Abra http://localhost:4180. O React está incluído nos arquivos locais. Fontes externas são opcionais; o navegador usa fontes do sistema se estiver offline. O backend atende apenas este computador. Os dados são persistidos em backend/hotel.db, criado automaticamente. Faça backup desse arquivo com o servidor parado.
+Abra http://localhost:4180. Sem DATABASE_URL, o sistema usa SQLite em backend/hotel.db. Com DATABASE_URL, usa PostgreSQL. O React está incluído nos arquivos locais.
 
-## Uso
+## Banco persistente na nuvem
 
-1. Em Cães e tutores, cadastre o cão, tutor, telefone e código da coleira.
-2. Crie uma estadia com entrada e saída previstas (a saída deve ser posterior à entrada).
-3. No painel, faça check-in na chegada e check-out na entrega ao tutor.
-4. Em Identificação, simule uma leitura com o código cadastrado.
+A versão publicada usa PostgreSQL da Neon. A conexão fica na variável DATABASE_URL, configurada em Render > titio-cachorrao > Environment. Usuário e senha não devem ser colocados no código, em commits ou no chat.
 
-Os indicadores diários usam a data local do navegador. Os horários reais das transições ficam no banco. Datas previstas não são substituídas pelas datas reais. Reservas conflitantes do mesmo cão são recusadas. O aplicativo inicia sem dados fictícios.
+O backend lê essa variável em backend/server.py. Na Neon, consulte os detalhes em projeto titio-cachorrao > Postgres > Connect. Use uma conexão com SSL. Se a conexão PostgreSQL falhar, o aplicativo não muda silenciosamente para SQLite.
 
-## Limites desta versão
+No Render, configure:
 
-Sem autenticação, edição/exclusão, cobrança, capacidade máxima, múltiplas unidades ou conexão real com leitores. Adequado para demonstração local; antes de uso operacional, implementar autenticação, backup, permissões e integração validada. Uma leitura identifica o cão e registra um evento; ela não encerra uma estadia automaticamente.
+- Root Directory: hotel-canino
+- Build Command: pip install -r requirements.txt
+- Start Command: python backend/server.py
+- HOST: 0.0.0.0
+- DATABASE_URL: conexão PostgreSQL da Neon (valor secreto).
 
-Veja docs/AUTOMACAO.md para a proposta de automação.
+PORT é fornecida pelo Render. O armazenamento PostgreSQL fica separado do servidor: reiniciar o Render não remove os registros. Mantenha backups; persistência não substitui backup.
 
+## Operação
 
-## Relatórios e diárias
+Cadastre o cão e o tutor, reserve entrada/saída e registre check-in e check-out. Reservas conflitantes do mesmo cão são recusadas. A simulação de coleira identifica o cadastro; não realiza check-out automaticamente.
 
-Acesse Relatórios e diárias. O valor inicial é R$ 110,00 por noite e pode ser alterado para novas reservas. Cada estadia mantém sua diária, inclusive após mudanças no cadastro do preço. Estadias anteriores a essa funcionalidade recebem a diária inicial de R$ 110,00.
+Relatórios e diárias mostra noites reservadas × diária da estadia. Mudanças de diária valem para novas reservas; cada estadia conserva seu preço. Pagamentos e descontos ainda não são registrados.
 
-O cálculo usa as noites reservadas (saída prevista menos entrada prevista), multiplicadas pela diária da reserva. Horários reais de check-in e check-out não recalculam esse período. Filtre por cão para ver o histórico, noites, diária e total. Valores previstos e estadias encerradas são apresentados separadamente. Não há registro de pagamentos, descontos ou saldo em aberto nesta versão.
+## Limites
 
+Ainda não há login ou controle de acesso. Use dados fictícios na demonstração pública. A identificação física por hardware ainda não foi implementada. A versão local SQLite é independente dos cadastros da Neon.
 
-## Dados do estabelecimento
+Documentos adicionais: docs/AUTOMACAO.md e docs/PUBLICAR.md.
 
-Informações fornecidas pelo responsável por imagem:
-
-- Titio Cachorrão.
-- Slogan: Há mais de 30 anos cuidando do seu pet!
-- R. Joaquim Bernardes Borges, 794 — Centro — Itu, São Paulo.
-- Telefone: (11) 4024-0420.
-- Instagram: @titiocachorrao.
-- Facebook: facebook.com/titiocachorraopetshop.
