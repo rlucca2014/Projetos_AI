@@ -36,13 +36,27 @@ def init():
   if DATABASE_URL: c.execute('ALTER TABLE stays ADD COLUMN IF NOT EXISTS rate_cents INTEGER NOT NULL DEFAULT 11000')
   elif 'rate_cents' not in [r['name'] for r in c.execute('PRAGMA table_info(stays)')]: c.execute('ALTER TABLE stays ADD COLUMN rate_cents INTEGER NOT NULL DEFAULT 11000')
 
+  migrations={'dogs':{'day_rate_cents':'INTEGER NOT NULL DEFAULT 7000','night_rate_cents':'INTEGER NOT NULL DEFAULT 7000'},'stays':{'day_rate_cents':'INTEGER','night_rate_cents':'INTEGER','event_name':'TEXT','day_units':'INTEGER','night_units':'INTEGER'}}
+  for table,columns in migrations.items():
+   existing=[] if DATABASE_URL else [r['name'] for r in c.execute('PRAGMA table_info('+table+')')]
+   for column,definition in columns.items():
+    if DATABASE_URL: c.execute('ALTER TABLE '+table+' ADD COLUMN IF NOT EXISTS '+column+' '+definition)
+    elif column not in existing: c.execute('ALTER TABLE '+table+' ADD COLUMN '+column+' '+definition)
+
+def cents(value):
+ try: amount=Decimal(str(value).replace(',','.'))
+ except InvalidOperation: raise ValueError('Informe um valor monetário válido.')
+ if not amount.is_finite() or amount<0 or amount>100000 or amount!=amount.quantize(Decimal('0.01')): raise ValueError('Informe valor entre zero e R$ 100.000, com até duas casas decimais.')
+ return int(amount*100)
+
 def state(c):
  data={k:[dict(r) for r in c.execute(q)] for k,q in {'dogs':'SELECT * FROM dogs ORDER BY id DESC','stays':'SELECT stays.*,dogs.name,dogs.owner FROM stays JOIN dogs ON dogs.id=stays.dog_id ORDER BY stays.id DESC','events':'SELECT * FROM events ORDER BY id DESC LIMIT 10'}.items()}
  data['rate_cents']=c.execute('SELECT rate_cents FROM settings WHERE id=1').fetchone()['rate_cents']
  data['storage']='postgresql' if DATABASE_URL else 'sqlite'
  for stay in data['stays']:
-  stay['nights']=(datetime.date.fromisoformat(stay['end'])-datetime.date.fromisoformat(stay['start'])).days
-  stay['total_cents']=stay['nights']*stay['rate_cents']
+  stay['nights']=(datetime.date.fromisoformat(stay['end'][:10])-datetime.date.fromisoformat(stay['start'][:10])).days
+  stay['legacy_pricing']=stay.get('day_units') is None
+  stay['total_cents']=stay['nights']*stay['rate_cents'] if stay['legacy_pricing'] else stay['day_units']*stay['day_rate_cents']+stay['night_units']*stay['night_rate_cents']
  return data
 
 class Handler(SimpleHTTPRequestHandler):
@@ -62,14 +76,35 @@ class Handler(SimpleHTTPRequestHandler):
     if self.path=='/api/dogs':
      for f in ['name','owner','phone']:
       if not str(d.get(f,'')).strip(): raise ValueError('Preencha nome do cão, tutor e telefone.')
-     c.execute('INSERT INTO dogs(name,breed,owner,phone,tag,notes) VALUES(?,?,?,?,?,?)',[str(d.get(k,'')).strip() or None for k in ['name','breed','owner','phone','tag','notes']])
+     values=[str(d.get(k,'')).strip() or None for k in ['name','breed','owner','phone','tag','notes']]+[cents(d.get('day_rate','70')),cents(d.get('night_rate','70'))]
+     if d.get('id'):
+      if not c.execute('SELECT id FROM dogs WHERE id=?',(d['id'],)).fetchone(): raise ValueError('Cão não encontrado.')
+      c.execute('UPDATE dogs SET name=?,breed=?,owner=?,phone=?,tag=?,notes=?,day_rate_cents=?,night_rate_cents=? WHERE id=?',values+[d['id']])
+     else: c.execute('INSERT INTO dogs(name,breed,owner,phone,tag,notes,day_rate_cents,night_rate_cents) VALUES(?,?,?,?,?,?,?,?)',values)
     elif self.path=='/api/stays':
-     start=datetime.date.fromisoformat(d['start']);end=datetime.date.fromisoformat(d['end'])
+     start=datetime.datetime.fromisoformat(d['start']);end=datetime.datetime.fromisoformat(d['end'])
+     if start.tzinfo is not None or end.tzinfo is not None: raise ValueError('Use o horário local do hotel, sem fuso no campo.')
      if end<=start: raise ValueError('A saída deve ser posterior à entrada.')
-     if not c.execute('SELECT id FROM dogs WHERE id=?',(d['dog_id'],)).fetchone(): raise ValueError('Cão não encontrado.')
-     if c.execute('SELECT id FROM stays WHERE dog_id=? AND status!="departed" AND start<? AND end>?',(d['dog_id'],str(end),str(start))).fetchone(): raise ValueError('Este cão já tem uma estadia no período.')
-     rate=c.execute('SELECT rate_cents FROM settings WHERE id=1').fetchone()['rate_cents']
-     c.execute('INSERT INTO stays(dog_id,start,end,rate_cents) VALUES(?,?,?,?)',(d['dog_id'],str(start),str(end),rate))
+     dog=c.execute('SELECT * FROM dogs WHERE id=?',(d['dog_id'],)).fetchone()
+     if not dog: raise ValueError('Cão não encontrado.')
+     current=None
+     if d.get('id'):
+      current=c.execute('SELECT * FROM stays WHERE id=?',(d['id'],)).fetchone()
+      if not current: raise ValueError('Estadia não encontrada.')
+      if int(current['dog_id'])!=int(d['dog_id']): raise ValueError('Não é possível trocar o cão de uma estadia.')
+     for other in c.execute('SELECT * FROM stays WHERE dog_id=?',(d['dog_id'],)):
+      if current and other['id']==current['id']: continue
+      if other['status']!='departed' and datetime.datetime.fromisoformat(other['start'])<end and datetime.datetime.fromisoformat(other['end'])>start: raise ValueError('Este cão já tem uma estadia no período.')
+     day=cents(d['day_rate']) if 'day_rate' in d else (current['day_rate_cents'] if current and current['day_rate_cents'] is not None else dog['day_rate_cents'])
+     night=cents(d['night_rate']) if 'night_rate' in d else (current['night_rate_cents'] if current and current['night_rate_cents'] is not None else dog['night_rate_cents'])
+     units=[]
+     for key,default in [('day_units',0 if current and current['day_units'] is None else 1),('night_units',max(0,(end.date()-start.date()).days) if current and current['night_units'] is None else 0)]:
+      value=d.get(key,current[key] if current and current[key] is not None else default)
+      if not str(value).isdigit() or int(value)>10000: raise ValueError('Informe quantidades inteiras entre zero e 10.000.')
+      units.append(int(value))
+     values=[start.isoformat(timespec='minutes'),end.isoformat(timespec='minutes'),day,night,str(d.get('event_name','')).strip()]+units
+     if current: c.execute('UPDATE stays SET start=?,end=?,day_rate_cents=?,night_rate_cents=?,event_name=?,day_units=?,night_units=? WHERE id=?',values+[current['id']])
+     else: c.execute('INSERT INTO stays(start,end,day_rate_cents,night_rate_cents,event_name,day_units,night_units,dog_id,rate_cents) VALUES(?,?,?,?,?,?,?,?,?)',values+[dog['id'],night])
     elif self.path=='/api/transition':
      s=c.execute('SELECT * FROM stays WHERE id=?',(d['id'],)).fetchone()
      if not s: raise ValueError('Estadia não encontrada.')
