@@ -43,3 +43,11 @@ Ainda não há login ou controle de acesso. Use dados fictícios na demonstraç�
 
 Documentos adicionais: docs/AUTOMACAO.md e docs/PUBLICAR.md.
 
+## Atualização de preços por cão e horários
+
+Novos cadastros começam com R$ 70 por dia e R$ 70 por noite. Edite o cão para registrar valores negociados independentes. Nova estadia usa esses valores; na entrada ou na edição, pode aplicar preços de evento e informar o motivo. Cada estadia conserva seus preços.
+
+Entrada e saída agora aceitam data e hora e podem ser editadas depois, inclusive em estadias encerradas. Os horários são informados no horário local do hotel. Quantidades de dias e noites são conferidas e preenchidas pelo operador: não existe horário de corte ou arredondamento automático para períodos parciais. Alterar datas não muda automaticamente as quantidades cobradas. Total = dias × valor do dia + noites × valor da noite.
+
+Estadias anteriores mantêm o cálculo histórico por noite até serem editadas. Campos novos são adicionados por migração sem apagar registros. Check-in/check-out mantêm o registro da ação do operador separado das datas editáveis da estadia.
+
